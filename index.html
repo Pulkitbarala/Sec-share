@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- ── Primary SEO ─────────────────────────────────── -->
+    <title>SecureShare – Free Encrypted File Sharing | AES-256 Security</title>
+    <meta name="description" content="Share files securely with end-to-end AES-256-GCM encryption. Set download limits, expiry timers, and password protection. Files are encrypted in your browser before upload — we never see your data." />
+    <meta name="keywords" content="encrypted file sharing, secure file transfer, AES-256 encryption, password protected file sharing, end-to-end encrypted files, free file sharing, temporary file links, secure upload" />
+    <meta name="author" content="SecureShare" />
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+    <link rel="canonical" href="https://secureshare.app/" />
+
+    <!-- ── Open Graph (Facebook / LinkedIn) ──────────────── -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SecureShare" />
+    <meta property="og:title" content="SecureShare – Free Encrypted File Sharing" />
+    <meta property="og:description" content="Send files with end-to-end AES-256 encryption, download limits, and expiry timers. No account needed to download. Your data stays private." />
+    <meta property="og:url" content="https://secureshare.app/" />
+    <meta property="og:image" content="https://secureshare.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="SecureShare – Encrypted File Sharing Platform" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- ── Twitter / X Card ───────────────────────────────── -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@secureshare" />
+    <meta name="twitter:title" content="SecureShare – Free Encrypted File Sharing" />
+    <meta name="twitter:description" content="AES-256 encrypted file sharing with download limits, expiry timers, and password protection." />
+    <meta name="twitter:image" content="https://secureshare.app/og-image.png" />
+
+    <!-- ── Schema.org JSON-LD Structured Data ────────────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "SecureShare",
+      "url": "https://secureshare.app",
+      "description": "Free encrypted file sharing with AES-256-GCM security. Share files with download limits, expiry timers, and optional password protection.",
+      "applicationCategory": "SecurityApplication",
+      "operatingSystem": "Web Browser",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "featureList": [
+        "AES-256-GCM client-side encryption",
+        "Password-protected file sharing",
+        "Download limit controls",
+        "Auto-expiring file links",
+        "No file size limit under 50MB",
+        "QR code sharing"
+      ],
+      "screenshot": "https://secureshare.app/og-image.png",
+      "creator": {
+        "@type": "Organization",
+        "name": "SecureShare"
+      }
+    }
+    </script>
+
+    <!-- ── FAQ Schema (boosts rich search snippets) ──────── -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How does SecureShare encrypt files?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "SecureShare uses AES-256-GCM encryption performed entirely in your browser before the file is uploaded. The server only ever receives ciphertext, so we can never read your files."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is SecureShare free to use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. SecureShare is completely free. You can upload files up to 50 MB, set download limits, and create expiring links at no cost."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do recipients need an account to download files?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Anyone with the 6-digit share code (and password, if set) can download the file without creating an account."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is the maximum file size on SecureShare?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The maximum file size is 50 MB per upload."
+          }
+        }
+      ]
+    }
+    </script>
+
+    <!-- ── Favicon & Theme ────────────────────────────────── -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <meta name="theme-color" content="#0d1117" />
+
+    <!-- ── Fonts ──────────────────────────────────────────── -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
