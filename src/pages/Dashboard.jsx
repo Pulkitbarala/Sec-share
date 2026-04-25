@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../utils/supabase'
@@ -6,6 +7,16 @@ import { formatBytes } from '../utils/formatters'
 import ProgressBar from '../components/ProgressBar'
 import { Toast, useToast } from '../components/Toast'
 import { Upload, File, Lock, Clock, Download, Eye, EyeOff, X, ShieldCheck } from 'lucide-react'
+=======
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { supabase } from '../utils/supabase'
+import { encryptFile, generateCode, hashPassword, readFileAsBuffer } from '../utils/crypto'
+import { formatBytes, formatExpiry } from '../utils/formatters'
+import ProgressBar from '../components/ProgressBar'
+import { Toast, useToast } from '../components/Toast'
+import { Upload, File, Lock, Clock, Download, Eye, EyeOff, X, ShieldCheck, Trash2, Copy, ExternalLink, CheckCircle2 } from 'lucide-react'
+>>>>>>> 18e890d (update)
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024
 
@@ -25,6 +36,55 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('')
   const [uploading, setUploading] = useState(false)
+<<<<<<< HEAD
+=======
+  const [myFiles, setMyFiles] = useState([])
+  const [loadingFiles, setLoadingFiles] = useState(true)
+
+  const fetchMyFiles = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data, error } = await supabase
+        .from('files')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setMyFiles(data || [])
+    } catch (err) {
+      console.error('Error fetching files:', err)
+    } finally {
+      setLoadingFiles(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMyFiles()
+  }, [])
+
+  const handleDelete = async (fileToDelete) => {
+    if (!window.confirm(`Are you sure you want to delete "${fileToDelete.name}"?`)) return
+    try {
+      const { error: storageError } = await supabase.storage.from('secure_files').remove([fileToDelete.storage_path])
+      if (storageError) console.warn('Storage deletion warning:', storageError)
+      
+      const { error: dbError } = await supabase.from('files').delete().eq('id', fileToDelete.id)
+      if (dbError) throw dbError
+      
+      showToast('File deleted successfully.', 'success')
+      fetchMyFiles()
+    } catch (err) {
+      console.error(err)
+      showToast('Failed to delete file.', 'error')
+    }
+  }
+
+  const copyLink = (code) => {
+    navigator.clipboard.writeText(`${window.location.origin}/download?code=${code}`)
+    showToast('Link copied to clipboard!', 'success')
+  }
+>>>>>>> 18e890d (update)
 
   const validateAndSetFile = (f) => {
     if (!f) return
@@ -85,6 +145,10 @@ export default function Dashboard() {
       })
       if (dbError) throw dbError
       setProgress(100)
+<<<<<<< HEAD
+=======
+      fetchMyFiles()
+>>>>>>> 18e890d (update)
       setTimeout(() => navigate(`/share/${code}`), 400)
     } catch (err) {
       console.error(err)
@@ -274,6 +338,94 @@ export default function Dashboard() {
         </div>
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* My Files Section */}
+      <div style={{ marginTop: '3rem' }}>
+        <div className="page-header" style={{ marginBottom: '1.5rem', textAlign: 'left', alignItems: 'flex-start' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 600, color: '#f0f6fc', marginBottom: '0.25rem' }}>My Files</h2>
+          <p className="subtitle" style={{ fontSize: '0.9rem', margin: 0 }}>Manage your uploaded files and track downloads.</p>
+        </div>
+
+        {loadingFiles ? (
+          <div style={{ textAlign: 'center', padding: '3rem' }}>
+            <span className="animate-spin" style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid rgba(35,159,137,0.2)', borderTopColor: '#52bea6', display: 'inline-block' }} />
+          </div>
+        ) : myFiles.length === 0 ? (
+          <div className="card card-body" style={{ textAlign: 'center', padding: '3rem 1.5rem' }}>
+            <File size={32} color="rgba(201,209,217,0.2)" style={{ margin: '0 auto 1rem' }} />
+            <div style={{ color: '#c9d1d9', fontWeight: 500 }}>No files uploaded yet</div>
+            <div style={{ color: 'rgba(201,209,217,0.5)', fontSize: '0.85rem', marginTop: '0.25rem' }}>Your uploaded files will appear here.</div>
+          </div>
+        ) : (
+          <div className="card" style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: 'rgba(201,209,217,0.6)' }}>
+                  <th style={{ padding: '1rem', fontWeight: 500 }}>File</th>
+                  <th style={{ padding: '1rem', fontWeight: 500 }}>Status</th>
+                  <th style={{ padding: '1rem', fontWeight: 500 }}>Downloads</th>
+                  <th style={{ padding: '1rem', fontWeight: 500 }}>Expires</th>
+                  <th style={{ padding: '1rem', fontWeight: 500, textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myFiles.map(f => {
+                  const isExpired = new Date(f.expiry_time) < new Date()
+                  const isMaxed = f.current_downloads >= f.max_downloads
+                  const isActive = !isExpired && !isMaxed
+
+                  return (
+                    <tr key={f.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                      <td style={{ padding: '1rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                          <File size={16} color={isActive ? '#52bea6' : 'rgba(201,209,217,0.3)'} />
+                          <div>
+                            <div style={{ fontWeight: 500, color: '#e6edf3', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'rgba(201,209,217,0.45)' }}>{formatBytes(f.size)} • Code: <span style={{ fontFamily: 'monospace' }}>{f.code}</span></div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '1rem' }}>
+                        {isActive ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.5rem', borderRadius: '100px', background: 'rgba(34,197,94,0.1)', color: '#4ade80', fontSize: '0.75rem', fontWeight: 600 }}>
+                            <CheckCircle2 size={12} /> Active
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.5rem', borderRadius: '100px', background: 'rgba(239,68,68,0.1)', color: '#f87171', fontSize: '0.75rem', fontWeight: 600 }}>
+                            <X size={12} /> {isExpired ? 'Expired' : 'Limit Reached'}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '1rem', color: '#c9d1d9' }}>
+                        {f.current_downloads} / {f.max_downloads}
+                      </td>
+                      <td style={{ padding: '1rem', color: 'rgba(201,209,217,0.6)' }}>
+                        {formatExpiry(f.expiry_time)}
+                      </td>
+                      <td style={{ padding: '1rem', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                          <button onClick={() => copyLink(f.code)} className="btn-secondary" style={{ padding: '0.4rem 0.6rem' }} title="Copy Link" disabled={!isActive}>
+                            <Copy size={14} />
+                          </button>
+                          <button onClick={() => navigate(`/share/${f.code}`)} className="btn-secondary" style={{ padding: '0.4rem 0.6rem' }} title="Share Page" disabled={!isActive}>
+                            <ExternalLink size={14} />
+                          </button>
+                          <button onClick={() => handleDelete(f)} className="btn-secondary" style={{ padding: '0.4rem 0.6rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.2)' }} title="Delete">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+>>>>>>> 18e890d (update)
       <Toast toast={toast} onClose={clearToast} />
     </div>
   )
