@@ -1,13 +1,3 @@
-<<<<<<< HEAD
-import { useState, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { supabase } from '../utils/supabase'
-import { encryptFile, generateCode, hashPassword, readFileAsBuffer } from '../utils/crypto'
-import { formatBytes } from '../utils/formatters'
-import ProgressBar from '../components/ProgressBar'
-import { Toast, useToast } from '../components/Toast'
-import { Upload, File, Lock, Clock, Download, Eye, EyeOff, X, ShieldCheck } from 'lucide-react'
-=======
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../utils/supabase'
@@ -16,7 +6,6 @@ import { formatBytes, formatExpiry } from '../utils/formatters'
 import ProgressBar from '../components/ProgressBar'
 import { Toast, useToast } from '../components/Toast'
 import { Upload, File, Lock, Clock, Download, Eye, EyeOff, X, ShieldCheck, Trash2, Copy, ExternalLink, CheckCircle2 } from 'lucide-react'
->>>>>>> 18e890d (update)
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024
 
@@ -36,8 +25,6 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('')
   const [uploading, setUploading] = useState(false)
-<<<<<<< HEAD
-=======
   const [myFiles, setMyFiles] = useState([])
   const [loadingFiles, setLoadingFiles] = useState(true)
 
@@ -68,10 +55,10 @@ export default function Dashboard() {
     try {
       const { error: storageError } = await supabase.storage.from('secure_files').remove([fileToDelete.storage_path])
       if (storageError) console.warn('Storage deletion warning:', storageError)
-      
+
       const { error: dbError } = await supabase.from('files').delete().eq('id', fileToDelete.id)
       if (dbError) throw dbError
-      
+
       showToast('File deleted successfully.', 'success')
       fetchMyFiles()
     } catch (err) {
@@ -84,7 +71,6 @@ export default function Dashboard() {
     navigator.clipboard.writeText(`${window.location.origin}/download?code=${code}`)
     showToast('Link copied to clipboard!', 'success')
   }
->>>>>>> 18e890d (update)
 
   const validateAndSetFile = (f) => {
     if (!f) return
@@ -145,10 +131,7 @@ export default function Dashboard() {
       })
       if (dbError) throw dbError
       setProgress(100)
-<<<<<<< HEAD
-=======
       fetchMyFiles()
->>>>>>> 18e890d (update)
       setTimeout(() => navigate(`/share/${code}`), 400)
     } catch (err) {
       console.error(err)
@@ -338,8 +321,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-<<<<<<< HEAD
-=======
       {/* My Files Section */}
       <div style={{ marginTop: '3rem' }}>
         <div className="page-header" style={{ marginBottom: '1.5rem', textAlign: 'left', alignItems: 'flex-start' }}>
@@ -425,8 +406,7 @@ export default function Dashboard() {
         )}
       </div>
 
->>>>>>> 18e890d (update)
       <Toast toast={toast} onClose={clearToast} />
-    </div>
+    </div >
   )
 }
