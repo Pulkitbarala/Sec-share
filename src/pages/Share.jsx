@@ -5,7 +5,8 @@ import { formatBytes, formatExpiry } from '../utils/formatters'
 import CountdownTimer from '../components/CountdownTimer'
 import CopyButton from '../components/CopyButton'
 import { QRCodeCanvas as QRCode } from 'qrcode.react'
-import { CheckCircle2, Lock, Download, Calendar, File, Share2, ArrowLeft } from 'lucide-react'
+import { CheckCircle2, Lock, Download, Calendar, File, Share2, ArrowLeft, Send } from 'lucide-react'
+import { Toast, useToast } from '../components/Toast'
 
 export default function Share() {
   const { code } = useParams()
@@ -13,6 +14,7 @@ export default function Share() {
   const [fileData, setFileData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const { toast, showToast, clearToast } = useToast()
 
   const shareUrl = `${window.location.origin}/download?code=${code}`
 
@@ -50,8 +52,26 @@ export default function Share() {
 
   const downloadsLeft = fileData.max_downloads - fileData.current_downloads
 
+  const handleNativeShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'SecureShare File',
+          text: `Here is a file securely shared with you! Use the code ${code} to download it.`,
+          url: shareUrl,
+        })
+      } catch (err) {
+        console.log('Share cancelled or failed', err)
+      }
+    } else {
+      navigator.clipboard.writeText(shareUrl)
+      showToast('Link copied! (Native share not supported)', 'success')
+    }
+  }
+
   return (
-    <div className="page-wrapper fade-in-up">
+    <>
+      <div className="page-wrapper fade-in-up">
       {/* Header */}
       <div className="page-header" style={{ textAlign: 'center', alignItems: 'center', display: 'flex', flexDirection: 'column' }}>
         <span className="eyebrow">File shared</span>
@@ -76,6 +96,9 @@ export default function Share() {
             <div style={{ display: 'flex', gap: '0.625rem', justifyContent: 'center', flexWrap: 'wrap' }}>
               <CopyButton text={code}>Copy Code</CopyButton>
               <CopyButton text={shareUrl}>Copy Link</CopyButton>
+              <button onClick={handleNativeShare} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <Send size={14} /> Share via App...
+              </button>
             </div>
           </div>
 
@@ -122,7 +145,10 @@ export default function Share() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+
+      <Toast toast={toast} onClose={clearToast} />
+    </>
   )
 }
 

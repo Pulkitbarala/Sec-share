@@ -21,10 +21,21 @@ export function formatDuration(totalSeconds) {
   return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':')
 }
 
-/** Format an ISO date string to a readable local time */
 export function formatExpiry(isoString) {
   return new Date(isoString).toLocaleString(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
   })
+}
+
+/** Format a duration in seconds into a readable ETA string */
+export function formatTimeRemaining(seconds) {
+  if (seconds <= 0 || !isFinite(seconds)) return '0s'
+  if (seconds < 60) return `${Math.floor(seconds)}s`
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  if (m < 60) return `${m}m ${s}s`
+  const h = Math.floor(m / 60)
+  const remM = m % 60
+  return `${h}h ${remM}m`
 }

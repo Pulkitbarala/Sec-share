@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { CheckCircle, XCircle, Info } from 'lucide-react'
 
 export function useToast() {
@@ -28,10 +29,11 @@ export function Toast({ toast, onClose }) {
     info: <Info size={16} />,
   }
 
-  return (
+  return createPortal(
     <div className={`toast ${toast.type}`} role="alert">
       {icons[toast.type]}
       <span>{toast.message}</span>
-    </div>
+    </div>,
+    document.body
   )
 }

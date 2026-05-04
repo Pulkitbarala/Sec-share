@@ -1,8 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
+import JSZip from 'jszip'
 import { supabase } from '../utils/supabase'
 import { encryptFile, generateCode, hashPassword, readFileAsBuffer } from '../utils/crypto'
-import { formatBytes, formatExpiry } from '../utils/formatters'
+import { formatBytes, formatExpiry, formatTimeRemaining } from '../utils/formatters'
+import { uploadWithProgress } from '../utils/network'
 import ProgressBar from '../components/ProgressBar'
 import { Toast, useToast } from '../components/Toast'
 import { Upload, File, Lock, Clock, Download, Eye, EyeOff, X, ShieldCheck, Trash2, Copy, ExternalLink, CheckCircle2 } from 'lucide-react'
@@ -15,7 +18,7 @@ export default function Dashboard() {
   const uploadInProgress = useRef(false)
   const { toast, showToast, clearToast } = useToast()
 
-  const [file, setFile] = useState(null)
+  const [files, setFiles] = useState([])
   const [dragOver, setDragOver] = useState(false)
   const [expiryHours, setExpiryHours] = useState(24)
   const [maxDownloads, setMaxDownloads] = useState(5)
@@ -25,8 +28,10 @@ export default function Dashboard() {
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [uploadStats, setUploadStats] = useState(null)
   const [myFiles, setMyFiles] = useState([])
   const [loadingFiles, setLoadingFiles] = useState(true)
+  const [fileToDelete, setFileToDelete] = useState(null)
 
   const fetchMyFiles = async () => {
     try {
@@ -50,8 +55,10 @@ export default function Dashboard() {
     fetchMyFiles()
   }, [])
 
-  const handleDelete = async (fileToDelete) => {
-    if (!window.confirm(`Are you sure you want to delete "${fileToDelete.name}"?`)) return
+  const confirmDelete = (file) => setFileToDelete(file)
+
+  const proceedDelete = async () => {
+    if (!fileToDelete) return
     try {
       const { error: storageError } = await supabase.storage.from('secure_files').remove([fileToDelete.storage_path])
       if (storageError) console.warn('Storage deletion warning:', storageError)
@@ -64,6 +71,8 @@ export default function Dashboard() {
     } catch (err) {
       console.error(err)
       showToast('Failed to delete file.', 'error')
+    } finally {
+      setFileToDelete(null)
     }
   }
 
@@ -72,19 +81,26 @@ export default function Dashboard() {
     showToast('Link copied to clipboard!', 'success')
   }
 
-  const validateAndSetFile = (f) => {
-    if (!f) return
-    if (f.size > MAX_FILE_SIZE) {
-      showToast(`File too large. Max size is ${formatBytes(MAX_FILE_SIZE)}.`, 'error')
-      return
+  const validateAndSetFiles = (newFiles) => {
+    if (!newFiles || newFiles.length === 0) return
+    const validFiles = []
+    for (let i = 0; i < newFiles.length; i++) {
+      const f = newFiles[i]
+      if (f.size > MAX_FILE_SIZE) {
+        showToast(`File "${f.name}" too large. Max size is ${formatBytes(MAX_FILE_SIZE)}.`, 'error')
+      } else {
+        validFiles.push(f)
+      }
     }
-    setFile(f)
+    if (validFiles.length > 0) {
+      setFiles(prev => [...prev, ...validFiles])
+    }
   }
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
     setDragOver(false)
-    validateAndSetFile(e.dataTransfer.files[0])
+    validateAndSetFiles(e.dataTransfer.files)
   }, [])
 
   const handleDragOver = (e) => { e.preventDefault(); setDragOver(true) }
@@ -92,7 +108,7 @@ export default function Dashboard() {
 
   const handleUpload = async () => {
     if (uploadInProgress.current) return
-    if (!file) return showToast('Please select a file first.', 'error')
+    if (files.length === 0) return showToast('Please select at least one file first.', 'error')
     if (usePassword && !filePassword) return showToast('Enter a password or disable password protection.', 'error')
 
     uploadInProgress.current = true
@@ -104,49 +120,87 @@ export default function Dashboard() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
+      const passwordHash = usePassword ? await hashPassword(filePassword) : null
       const code = generateCode()
       const encKey = usePassword ? filePassword : code
-      const passwordHash = usePassword ? await hashPassword(filePassword) : null
 
-      setProgress(10)
-      const buffer = await readFileAsBuffer(file)
-      setProgress(30)
-      const encryptedBuffer = await encryptFile(buffer, encKey)
-      setProgress(55)
+      let finalName, finalSize, finalBuffer;
 
+      if (files.length === 1) {
+        setStage('encrypting')
+        setProgress(10)
+        finalName = files[0].name
+        finalSize = files[0].size
+        finalBuffer = await readFileAsBuffer(files[0])
+      } else {
+        setStage('compressing')
+        setProgress(10)
+        const zip = new JSZip()
+        for (const f of files) {
+          zip.file(f.name, f)
+        }
+        setProgress(25)
+        const zipBlob = await zip.generateAsync({ type: 'blob' })
+        finalName = 'Archive.zip'
+        finalSize = zipBlob.size
+        finalBuffer = await zipBlob.arrayBuffer()
+      }
+
+      setProgress(40)
+      setStage('encrypting')
+      const encryptedBuffer = await encryptFile(finalBuffer, encKey)
+
+      setProgress(60)
       setStage('uploading')
-      const storagePath = `${user.id}/${code}/${file.name}.enc`
+      const storagePath = `${user.id}/${code}/${finalName}.enc`
       const blob = new Blob([encryptedBuffer], { type: 'application/octet-stream' })
 
-      const { error: storageError } = await supabase.storage.from('secure_files').upload(storagePath, blob, { upsert: false })
-      if (storageError) throw storageError
-      setProgress(80)
-
+      await uploadWithProgress('secure_files', storagePath, blob, (stats) => {
+        // Stats: { percent, speed, timeRemaining, loaded, total }
+        // Scale 60-95% for the upload part
+        const scaledProgress = 60 + (stats.percent * 0.35)
+        setProgress(Math.floor(scaledProgress))
+        setUploadStats(stats)
+      })
+      
+      setProgress(95)
+      setStage('saving')
       const expiryTime = new Date(Date.now() + expiryHours * 3600000).toISOString()
       const { error: dbError } = await supabase.from('files').insert({
-        code, name: file.name, size: file.size, storage_path: storagePath,
+        code, name: finalName, size: finalSize, storage_path: storagePath,
         expiry_time: expiryTime, max_downloads: parseInt(maxDownloads),
         current_downloads: 0, is_password_protected: usePassword,
         password_hash: passwordHash, user_id: user.id,
       })
       if (dbError) throw dbError
+
       setProgress(100)
       fetchMyFiles()
-      setTimeout(() => navigate(`/share/${code}`), 400)
+      showToast(`${files.length > 1 ? files.length + ' files bundled and uploaded' : 'File uploaded'} successfully!`, 'success')
+      
+      // Reset staging
+      setFiles([])
+      setUsePassword(false)
+      setFilePassword('')
+
+      // Redirect to the share page
+      navigate(`/share/${code}`)
     } catch (err) {
       console.error(err)
       showToast(err.message || 'Upload failed. Please try again.', 'error')
+    } finally {
       setUploading(false)
       setStage('')
       setProgress(0)
-    } finally {
+      setUploadStats(null)
       uploadInProgress.current = false
     }
   }
 
   return (
-    <div className="page-wrapper fade-in-up">
-      {/* Header */}
+    <>
+      <div className="page-wrapper fade-in-up">
+        {/* Header */}
       <div className="page-header">
         <span className="eyebrow">Secure upload</span>
         <h1>Upload a File</h1>
@@ -170,27 +224,32 @@ export default function Dashboard() {
             <input
               ref={fileInputRef}
               type="file"
+              multiple
               style={{ display: 'none' }}
-              onChange={(e) => validateAndSetFile(e.target.files[0])}
+              onChange={(e) => validateAndSetFiles(e.target.files)}
               disabled={uploading}
             />
-            {file ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'center' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: 'rgba(35,159,137,0.15)', border: '1px solid rgba(35,159,137,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <File size={20} color="#52bea6" />
-                </div>
-                <div style={{ textAlign: 'left', minWidth: 0 }}>
-                  <div style={{ color: '#e6edf3', fontWeight: 600, fontSize: '0.9rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px' }}>{file.name}</div>
-                  <div style={{ color: 'rgba(201,209,217,0.5)', fontSize: '0.8rem' }}>{formatBytes(file.size)}</div>
-                </div>
-                {!uploading && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setFile(null) }}
-                    style={{ marginLeft: 'auto', width: '28px', height: '28px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(201,209,217,0.5)', flexShrink: 0 }}
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+            {files.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%', maxHeight: '200px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                {files.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', justifyContent: 'flex-start', background: 'rgba(255,255,255,0.02)', padding: '0.5rem', borderRadius: '8px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(35,159,137,0.15)', border: '1px solid rgba(35,159,137,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <File size={16} color="#52bea6" />
+                    </div>
+                    <div style={{ textAlign: 'left', minWidth: 0, flex: 1 }}>
+                      <div style={{ color: '#e6edf3', fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                      <div style={{ color: 'rgba(201,209,217,0.5)', fontSize: '0.75rem' }}>{formatBytes(f.size)}</div>
+                    </div>
+                    {!uploading && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setFiles(files.filter((_, idx) => idx !== i)) }}
+                        style={{ width: '26px', height: '26px', borderRadius: '6px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(201,209,217,0.5)', flexShrink: 0 }}
+                      >
+                        <X size={12} />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
@@ -198,8 +257,8 @@ export default function Dashboard() {
                   <Upload size={22} color="#52bea6" />
                 </div>
                 <div>
-                  <div style={{ color: '#c9d1d9', fontWeight: 600, fontSize: '0.9rem' }}>Drop your file here</div>
-                  <div style={{ color: 'rgba(201,209,217,0.45)', fontSize: '0.8rem', marginTop: '0.2rem' }}>or click to browse · Max 50 MB</div>
+                  <div style={{ color: '#c9d1d9', fontWeight: 600, fontSize: '0.9rem' }}>Drop your files here</div>
+                  <div style={{ color: 'rgba(201,209,217,0.45)', fontSize: '0.8rem', marginTop: '0.2rem' }}>or click to browse · Max 50 MB per file</div>
                 </div>
               </div>
             )}
@@ -210,11 +269,17 @@ export default function Dashboard() {
             <div className="card card-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                 <span style={{ color: '#c9d1d9', fontWeight: 500 }}>
-                  {stage === 'encrypting' ? '🔐 Encrypting in browser…' : '☁️ Uploading encrypted file…'}
+                  {stage === 'compressing' ? '🗜️ Bundling files into Zip…' : stage === 'encrypting' ? '🔐 Encrypting in browser…' : stage === 'saving' ? '💾 Finalizing save…' : '☁️ Uploading encrypted file…'}
                 </span>
                 <span style={{ color: 'rgba(201,209,217,0.45)' }}>{progress}%</span>
               </div>
               <ProgressBar progress={progress} />
+              {uploadStats && stage === 'uploading' && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'rgba(201,209,217,0.6)', marginTop: '0.2rem' }}>
+                  <span>{formatBytes(uploadStats.speed)}/s</span>
+                  <span>ETA: {formatTimeRemaining(uploadStats.timeRemaining)}</span>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -296,7 +361,7 @@ export default function Dashboard() {
           <button
             id="upload-btn"
             onClick={handleUpload}
-            disabled={uploading || !file}
+            disabled={uploading || files.length === 0}
             className="btn-primary btn-lg"
             style={{ width: '100%' }}
           >
@@ -392,7 +457,7 @@ export default function Dashboard() {
                           <button onClick={() => navigate(`/share/${f.code}`)} className="btn-secondary" style={{ padding: '0.4rem 0.6rem' }} title="Share Page" disabled={!isActive}>
                             <ExternalLink size={14} />
                           </button>
-                          <button onClick={() => handleDelete(f)} className="btn-secondary" style={{ padding: '0.4rem 0.6rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.2)' }} title="Delete">
+                          <button onClick={() => confirmDelete(f)} className="btn-secondary" style={{ padding: '0.4rem 0.6rem', color: '#f87171', borderColor: 'rgba(248,113,113,0.2)' }} title="Delete">
                             <Trash2 size={14} />
                           </button>
                         </div>
@@ -405,8 +470,26 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+      </div>
+
+      {/* Delete Modal */}
+      {fileToDelete && createPortal(
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1rem' }}>
+          <div className="card card-body fade-in-up" style={{ maxWidth: '400px', width: '100%', background: '#0d1117', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '0.5rem', color: '#f0f6fc', fontSize: '1.1rem' }}>Confirm Delete</h3>
+            <p style={{ color: 'rgba(201,209,217,0.7)', fontSize: '0.9rem', marginBottom: '1.5rem', lineHeight: 1.5 }}>
+              Are you sure you want to delete "<strong>{fileToDelete.name}</strong>"? This action cannot be undone.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button onClick={() => setFileToDelete(null)} className="btn-secondary">Cancel</button>
+              <button onClick={proceedDelete} className="btn-primary" style={{ background: '#f87171', color: '#111' }}>Delete File</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       <Toast toast={toast} onClose={clearToast} />
-    </div >
+    </>
   )
 }
